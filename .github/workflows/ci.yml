@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # The runner's Swift is older than a current desktop's, and has rejected
+      # code that compiles locally. Printing it makes that visible in the log
+      # rather than a puzzle.
+      - name: Show toolchain
+        run: |
+          swift --version
+          git --version
+
+      - name: Build
+        run: swift build --build-tests
+
+      # The scanner tests build real repositories in a temporary directory and
+      # push between them, so they need an identity git will accept.
+      - name: Test
+        run: swift test
+
+      - name: Build the app bundle
+        run: Scripts/bundle.sh --version 0.0.0-ci
+
+      - name: Check the bundle is launchable
+        run: |
+          test -x "dist/Worktrees.app/Contents/MacOS/Worktrees"
+          plutil -lint "dist/Worktrees.app/Contents/Info.plist"

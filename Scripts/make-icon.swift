@@ -10,8 +10,8 @@ let outputPath = CommandLine.arguments.count > 1
     ? CommandLine.arguments[1]
     : "AppIcon.icns"
 
-/// Draw one square icon at `size` points: a trunk with two branches leaving it, one
-/// still open and one merged back.
+/// Draw one square icon at `size` points: two worktrees leaving the working copy and
+/// merging back, which traces a W.
 func render(size: Int) -> CGImage? {
     let s = CGFloat(size)
     guard let context = CGContext(
@@ -60,67 +60,48 @@ func render(size: Int) -> CGImage? {
     context.setLineJoin(.round)
     context.setLineWidth(line)
 
-    let trunkX = rect.minX + rect.width * 0.30
-    let branchX = rect.maxX - rect.width * 0.28
-    let top = rect.maxY - rect.height * 0.18
-    let bottom = rect.minY + rect.height * 0.18
     let nodeRadius = rect.width * 0.072
 
-    // The trunk: the working copy, running the whole height.
+    /// A point given as a fraction of the icon's rounded square, origin bottom-left.
+    func point(_ fx: CGFloat, _ fy: CGFloat) -> CGPoint {
+        CGPoint(x: rect.minX + rect.width * fx, y: rect.minY + rect.height * fy)
+    }
+
+    let workingCopy = point(0.16, 0.80)
+    let mergeBack = point(0.50, 0.61)
+    let landed = point(0.84, 0.80)
+
+    // One stroke: the shoulders fall as trunks, the feet curve into each other as
+    // merges. Drawing it unbroken keeps the apex a single mitred join rather than two
+    // round caps stacked on the same point.
     context.setStrokeColor(CGColor(gray: 1, alpha: 0.95))
-    context.move(to: CGPoint(x: trunkX, y: bottom))
-    context.addLine(to: CGPoint(x: trunkX, y: top))
+    context.move(to: workingCopy)
+    context.addLine(to: point(0.16, 0.44))
+    context.addCurve(
+        to: mergeBack,
+        control1: point(0.16, 0.20),
+        control2: point(0.44, 0.20)
+    )
+    context.addCurve(
+        to: point(0.84, 0.44),
+        control1: point(0.56, 0.20),
+        control2: point(0.84, 0.20)
+    )
+    context.addLine(to: landed)
     context.strokePath()
 
-    /// A branch leaving the trunk at `y` and curving out to `branchX`.
-    func branch(from y: CGFloat, to endY: CGFloat, alpha: CGFloat, merged: Bool) {
-        context.setStrokeColor(CGColor(gray: 1, alpha: alpha))
-        context.move(to: CGPoint(x: trunkX, y: y))
-        context.addCurve(
-            to: CGPoint(x: branchX, y: endY),
-            control1: CGPoint(x: trunkX + rect.width * 0.20, y: y),
-            control2: CGPoint(x: branchX - rect.width * 0.12, y: endY - (endY - y) * 0.55)
-        )
-        context.strokePath()
-
-        if merged {
-            // Curves back into the trunk higher up: work that landed.
-            context.move(to: CGPoint(x: branchX, y: endY))
-            context.addCurve(
-                to: CGPoint(x: trunkX, y: top),
-                control1: CGPoint(x: branchX, y: endY + (top - endY) * 0.55),
-                control2: CGPoint(x: trunkX + rect.width * 0.20, y: top)
-            )
-            context.strokePath()
-        }
-    }
-
-    branch(from: bottom + rect.height * 0.20, to: rect.midY + rect.height * 0.10, alpha: 0.95, merged: true)
-    branch(from: rect.midY - rect.height * 0.06, to: bottom + rect.height * 0.06, alpha: 0.7, merged: false)
-
     /// A filled dot marking a commit.
-    func node(_ point: CGPoint, filled: Bool) {
-        let box = CGRect(
-            x: point.x - nodeRadius, y: point.y - nodeRadius,
+    func node(_ center: CGPoint) {
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fillEllipse(in: CGRect(
+            x: center.x - nodeRadius, y: center.y - nodeRadius,
             width: nodeRadius * 2, height: nodeRadius * 2
-        )
-        if filled {
-            context.setFillColor(CGColor(gray: 1, alpha: 1))
-            context.fillEllipse(in: box)
-        } else {
-            // Hollow: the branch that has not been pushed anywhere yet.
-            context.setFillColor(CGColor(red: 0.13, green: 0.5, blue: 0.63, alpha: 1))
-            context.fillEllipse(in: box)
-            context.setStrokeColor(CGColor(gray: 1, alpha: 0.95))
-            context.setLineWidth(line * 0.8)
-            context.strokeEllipse(in: box.insetBy(dx: line * 0.4, dy: line * 0.4))
-        }
+        ))
     }
 
-    node(CGPoint(x: trunkX, y: top), filled: true)
-    node(CGPoint(x: trunkX, y: bottom), filled: true)
-    node(CGPoint(x: branchX, y: rect.midY + rect.height * 0.10), filled: true)
-    node(CGPoint(x: branchX, y: bottom + rect.height * 0.06), filled: false)
+    node(workingCopy)
+    node(mergeBack)
+    node(landed)
 
     return context.makeImage()
 }

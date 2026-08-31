@@ -8,20 +8,16 @@ on:
       version:
         description: "Version to build (e.g. 1.2.3)"
         required: true
-      update_tap:
-        description: "Bump the worktrees-ui cask in ryan953/homebrew-tap"
-        required: false
-        type: boolean
-        default: true
 
 permissions:
   contents: write
 
+# The Homebrew cask is not updated from here. ryan953/homebrew-tap reads the
+# published releases of every entry it carries and bumps itself, so a release
+# needs no write access to another repository and no token to hold it.
 jobs:
   release:
     runs-on: macos-15
-    outputs:
-      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v5
 
@@ -116,21 +112,3 @@ jobs:
               --title "Worktrees ${VERSION}" \
               --notes-file notes.md
           fi
-
-  # The tap owns what "bump" means; this only says which entry moved to what.
-  # It hangs off the release job rather than listening for `release: published`,
-  # which never fires for a release created with github.token.
-  #
-  # TAP_TOKEN needs Contents: Read+Write on ryan953/homebrew-tap and Contents:
-  # Read here, because a cask bump downloads this release's asset to checksum
-  # it. Without it this job fails and says so; the release itself still stands.
-  tap:
-    needs: release
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.update_tap }}
-    uses: ryan953/homebrew-tap/.github/workflows/bump.yml@main
-    with:
-      kind: cask
-      name: worktrees-ui
-      version: ${{ needs.release.outputs.version }}
-    secrets:
-      TAP_TOKEN: ${{ secrets.TAP_TOKEN }}

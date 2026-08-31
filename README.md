@@ -134,16 +134,20 @@ working copy path. **Group by** then splits the repositories themselves:
 ## Install
 
 ```sh
-export HOMEBREW_GITHUB_API_TOKEN=<a token that can read this repo>
-brew install --cask --no-quarantine ryan953/tap/worktrees-ui
+brew install --cask ryan953/tap/worktrees-ui
 ```
 
-The token is needed because this repository is private, and `--no-quarantine` because
-the app is ad-hoc signed but not notarized. Or download the zip from
-[Releases](https://github.com/ryan953/worktrees-ui/releases), unzip it into
-`/Applications`, and use right-click → Open on the first launch.
+Or download the zip from [Releases](../../releases), unzip it, and drag
+**Worktrees.app** to `/Applications`.
 
-### Requirements
+The build is ad-hoc signed rather than notarized, so the first launch needs
+**right-click → Open** (once), or:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Worktrees.app"
+```
+
+## Requirements
 
 - macOS 14 or later. The release build is universal.
 - `git` on your `PATH`.

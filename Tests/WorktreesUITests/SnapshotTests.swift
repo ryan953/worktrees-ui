@@ -105,6 +105,31 @@ struct SnapshotTests {
         try Self.assertNotBlank(url, name: "sidebar-only-here")
     }
 
+    @Test func rendersTheSidebarGroupedByLocalChanges() throws {
+        let store = WorktreeStore(
+            repositories: Fixtures.repositories() + [Fixtures.soloRepository()])
+        store.grouping = .activity
+        let url = try Self.snapshot(
+            SidebarView(store: store),
+            size: CGSize(width: 330, height: 720),
+            name: "sidebar-grouped"
+        )
+        try Self.assertNotBlank(url, name: "sidebar-grouped")
+    }
+
+    @Test func rendersTheCleanupSheet() throws {
+        let store = WorktreeStore(
+            repositories: Fixtures.repositories(),
+            cleanupCandidates: Fixtures.candidates()
+        )
+        let url = try Self.snapshot(
+            CleanupSheet(store: store),
+            size: CGSize(width: 640, height: 560),
+            name: "cleanup-sheet"
+        )
+        try Self.assertNotBlank(url, name: "cleanup-sheet")
+    }
+
     @Test func rendersAWorktreeWithWorkOnlyOnThisMachine() throws {
         let store = Fixtures.store(selection: Fixtures.localOnlyID)
         let worktree = try #require(store.selectedWorktree)

@@ -4,6 +4,8 @@ import WorktreeKit
 struct ContentView: View {
     @Bindable var store: WorktreeStore
 
+    @State private var isCleaningUp = false
+
     var body: some View {
         NavigationSplitView {
             SidebarView(store: store)
@@ -29,6 +31,7 @@ struct ContentView: View {
         .searchable(text: $store.search, placement: .sidebar, prompt: "Branch, path or pull request")
         .toolbar { toolbar }
         .safeAreaInset(edge: .bottom, spacing: 0) { banners }
+        .sheet(isPresented: $isCleaningUp) { CleanupSheet(store: store) }
         .task { await store.bootstrap() }
     }
 
@@ -53,6 +56,15 @@ struct ContentView: View {
                 Label("Hide worktrees with no commits of their own", systemImage: "line.3.horizontal.decrease.circle")
             }
             .help("Hide worktrees with no commits of their own")
+        }
+        ToolbarItem {
+            Button {
+                isCleaningUp = true
+            } label: {
+                Label("Clean Up", systemImage: "trash")
+            }
+            .help("Remove worktrees whose commits are already on GitHub")
+            .disabled(store.isLoading || store.gitIsMissing)
         }
         ToolbarItem {
             Button {

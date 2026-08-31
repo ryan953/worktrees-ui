@@ -11,6 +11,10 @@ struct SettingsView: View {
     @State private var gitPath = Preferences.gitPath
     @State private var ghPath = Preferences.ghPath
     @State private var terminalApp = Preferences.terminalApp
+    @State private var cleanupHour = Preferences.cleanupHour
+    @State private var cleanupMinimumAgeDays = Preferences.cleanupMinimumAgeDays
+    @State private var cleanupIncludesOpenPullRequests = Preferences.cleanupIncludesOpenPullRequests
+    @State private var cleanupDeletesBranch = Preferences.cleanupDeletesBranch
 
     var body: some View {
         Form {
@@ -59,6 +63,82 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Daily cleanup") {
+                switch store.agentStatus {
+                case .notInstalled:
+                    Text(
+                        "A background job can remove worktrees whose commits are already "
+                            + "on GitHub in a pull request, so the ones still holding work "
+                            + "stay easy to see."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                case let .installed(hour):
+                    Label("Installed, runs daily at \(hour):00", systemImage: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                case let .brokenExecutable(path):
+                    Label(
+                        "Installed, but the tool it runs is missing (\(path)). "
+                            + "Reinstall to point it at this copy of the app.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                }
+
+                Picker("Run at", selection: $cleanupHour) {
+                    ForEach(0..<24, id: \.self) { hour in
+                        Text(String(format: "%02d:00", hour)).tag(hour)
+                    }
+                }
+                .onChange(of: cleanupHour) { save() }
+
+                Stepper(
+                    "Only worktrees left alone for \(cleanupMinimumAgeDays) "
+                        + (cleanupMinimumAgeDays == 1 ? "day" : "days"),
+                    value: $cleanupMinimumAgeDays,
+                    in: 0...180
+                )
+                .onChange(of: cleanupMinimumAgeDays) { save() }
+
+                Toggle("Also remove worktrees whose pull request is still open", isOn: $cleanupIncludesOpenPullRequests)
+                    .onChange(of: cleanupIncludesOpenPullRequests) { save() }
+                Toggle("Delete the local branch too", isOn: $cleanupDeletesBranch)
+                    .onChange(of: cleanupDeletesBranch) { save() }
+
+                Text(
+                    "These two rules apply to the scheduled job. The Clean Up button "
+                        + "lists everything that is safe whatever its age, and leaves "
+                        + "open pull requests unticked rather than hidden."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                HStack {
+                    if store.agentStatus == .notInstalled {
+                        Button("Install Daily Cleanup") {
+                            Task { await store.installAgent() }
+                        }
+                    } else {
+                        Button("Reinstall") {
+                            Task { await store.installAgent() }
+                        }
+                        Button("Run Now") {
+                            Task { await store.runAgentNow() }
+                        }
+                        Button("Remove", role: .destructive) {
+                            Task { await store.removeAgent() }
+                        }
+                    }
+                    Spacer()
+                    Button("Open Log") {
+                        SystemActions.reveal(
+                            NSHomeDirectory() + "/Library/Logs/Worktrees/cleanup.log")
+                    }
+                }
+            }
+
             Section("Tools") {
                 TextField("git", text: $gitPath, prompt: Text("found on your PATH"))
                     .font(.callout.monospaced())
@@ -75,7 +155,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 480, height: 470)
+        .frame(width: 520, height: 620)
     }
 
     private func binding(for index: Int) -> Binding<String> {
@@ -107,6 +187,10 @@ struct SettingsView: View {
         Preferences.gitPath = gitPath.trimmingCharacters(in: .whitespaces)
         Preferences.ghPath = ghPath.trimmingCharacters(in: .whitespaces)
         Preferences.terminalApp = terminalApp
+        Preferences.cleanupHour = cleanupHour
+        Preferences.cleanupMinimumAgeDays = cleanupMinimumAgeDays
+        Preferences.cleanupIncludesOpenPullRequests = cleanupIncludesOpenPullRequests
+        Preferences.cleanupDeletesBranch = cleanupDeletesBranch
         Task { await store.reloadSettings() }
     }
 }

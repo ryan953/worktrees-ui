@@ -152,4 +152,67 @@ enum Fixtures {
     static var publishedID: Worktree.ID {
         "\(home)/code/seer/.claude/worktrees/codegen"
     }
+
+    /// A repository with nothing but its working copy, for the grouping facets.
+    static func soloRepository() -> Repository {
+        let root = "\(home)/code/dotfiles"
+        return Repository(
+            root: root,
+            remote: RemoteRepo(host: "github.com", owner: "ryan953", name: "dotfiles"),
+            defaultBranch: "main",
+            worktrees: [
+                Worktree(
+                    path: root, repoRoot: root, branch: "main", head: "aaa111",
+                    isMain: true, sync: .upToDate, baseBranch: "main"
+                )
+            ],
+            lastFetch: Date().addingTimeInterval(-3600)
+        )
+    }
+
+    /// A cleanup plan covering both outcomes, so the sheet can be seen with something
+    /// to remove and something explained.
+    static func candidates() -> [CleanupCandidate] {
+        let seer = repositories()[0]
+
+        func worktree(_ branch: String) -> Worktree {
+            seer.worktrees.first { $0.branch == branch }!
+        }
+
+        let merged = worktree("seer/embed-logging")
+        let codegen = worktree("seer/codegen-cards")
+        let dirty = worktree("seer/autofix-trigger-recall")
+        let open = worktree("pr7795-embed")
+
+        return [
+            CleanupCandidate(
+                worktree: merged, repositoryName: "seer",
+                decision: .remove(
+                    RemovalGrounds(
+                        pullRequest: merged.pullRequest!,
+                        recovery: .pullRequestRef(number: 7760),
+                        idleDays: 21
+                    )
+                )
+            ),
+            CleanupCandidate(
+                worktree: codegen, repositoryName: "seer",
+                decision: .remove(
+                    RemovalGrounds(
+                        pullRequest: codegen.pullRequest!,
+                        recovery: .remoteBranch("origin/seer/codegen-cards"),
+                        idleDays: 15
+                    )
+                )
+            ),
+            CleanupCandidate(
+                worktree: dirty, repositoryName: "seer",
+                decision: .keep(.uncommittedChanges(3))
+            ),
+            CleanupCandidate(
+                worktree: open, repositoryName: "seer",
+                decision: .keep(.pullRequestStillOpen(number: 7795))
+            ),
+        ]
+    }
 }

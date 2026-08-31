@@ -120,6 +120,49 @@ public struct GitClient: Sendable {
         return String(childPath.dropFirst(prefix.count))
     }
 
+    /// Ask the remote for one ref's sha, without fetching it.
+    ///
+    /// This is how a deleted branch is still checked: `refs/pull/<n>/head` is kept by
+    /// GitHub permanently, so it answers even when the branch itself is long gone.
+    public func lsRemote(_ ref: String, remote: String = "origin", in directory: String) async -> String? {
+        guard let text = await optional(["ls-remote", remote, ref], in: directory, timeout: 60)
+        else { return nil }
+        // "<sha>\t<ref>"; empty output means the remote has no such ref.
+        guard let first = text.split(separator: "\n").first else { return nil }
+        let sha = first.split(whereSeparator: { $0 == "\t" || $0 == " " }).first
+        return sha.map(String.init)
+    }
+
+    public func hasCommit(_ sha: String, in directory: String) async -> Bool {
+        await refExists(sha, in: directory)
+    }
+
+    /// Whether `ancestor` is reachable from `descendant`.
+    public func isAncestor(_ ancestor: String, of descendant: String, in directory: String) async -> Bool {
+        guard
+            let result = try? await run(
+                ["merge-base", "--is-ancestor", ancestor, descendant], in: directory)
+        else { return false }
+        return result.succeeded
+    }
+
+    /// Whether any worktree still has this branch checked out.
+    public func branchIsCheckedOut(_ branch: String, in directory: String) async -> Bool {
+        guard let text = await optional(["worktree", "list", "--porcelain"], in: directory) else {
+            return true
+        }
+        return WorktreePorcelain.parse(text).contains { $0.branch == branch }
+    }
+
+    /// Remove a worktree, refusing anything with modifications.
+    ///
+    /// Deliberately without `--force`: git's own check on a dirty or untracked-carrying
+    /// directory is a second opinion independent of the planner's, and the whole point
+    /// of this feature is that removal never loses work.
+    public func removeWorktree(at path: String, in directory: String) async throws {
+        _ = try await output(["worktree", "remove", path], in: directory, timeout: 120)
+    }
+
     /// Fetch the remote so "published" reflects the server rather than the last time
     /// someone happened to fetch.
     ///

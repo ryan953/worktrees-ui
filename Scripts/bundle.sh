@@ -31,18 +31,28 @@ if [[ "$UNIVERSAL" == "1" ]]; then
   # Built one slice per arch and lipo'd together rather than
   # `swift build --arch arm64 --arch x86_64`, which routes through xcbuild and
   # needs a full Xcode install rather than just the command line tools.
-  swift build -c release --product WorktreesUI --triple arm64-apple-macosx14.0
-  swift build -c release --product WorktreesUI --triple x86_64-apple-macosx14.0
+  for arch in arm64 x86_64; do
+    swift build -c release --product WorktreesUI --triple "${arch}-apple-macosx14.0"
+    swift build -c release --product worktrees-cleanup --triple "${arch}-apple-macosx14.0"
+  done
   mkdir -p "$OUTPUT"
   BINARY="$OUTPUT/WorktreesUI-universal"
+  TOOL="$OUTPUT/worktrees-cleanup-universal"
   lipo -create -output "$BINARY" \
     ".build/arm64-apple-macosx/release/WorktreesUI" \
     ".build/x86_64-apple-macosx/release/WorktreesUI"
+  lipo -create -output "$TOOL" \
+    ".build/arm64-apple-macosx/release/worktrees-cleanup" \
+    ".build/x86_64-apple-macosx/release/worktrees-cleanup"
 else
   swift build -c release --product WorktreesUI
-  BINARY="$(swift build -c release --product WorktreesUI --show-bin-path)/WorktreesUI"
+  swift build -c release --product worktrees-cleanup
+  BIN_PATH="$(swift build -c release --product WorktreesUI --show-bin-path)"
+  BINARY="$BIN_PATH/WorktreesUI"
+  TOOL="$BIN_PATH/worktrees-cleanup"
 fi
 [[ -f "$BINARY" ]] || { echo "No binary at $BINARY" >&2; exit 1; }
+[[ -f "$TOOL" ]] || { echo "No cleanup tool at $TOOL" >&2; exit 1; }
 
 APP="$OUTPUT/$APP_NAME.app"
 echo "==> Assembling $APP"
@@ -50,6 +60,10 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 cp "$BINARY" "$APP/Contents/MacOS/$EXECUTABLE_NAME"
+# Beside the app's own executable, because the LaunchAgent the app installs points
+# straight at this path: moving or deleting the app then leaves a job that visibly
+# does nothing rather than one quietly running a stale build.
+cp "$TOOL" "$APP/Contents/MacOS/worktrees-cleanup"
 sed -e "s/__VERSION__/$VERSION/g" -e "s/__EXECUTABLE__/$EXECUTABLE_NAME/g" \
   Resources/Info.plist > "$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null

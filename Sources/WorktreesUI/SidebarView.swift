@@ -6,14 +6,30 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: $store.selection) {
-            ForEach(store.visibleRepositories) { repository in
-                Section {
-                    ForEach(repository.worktrees) { worktree in
-                        WorktreeRow(worktree: worktree)
-                            .tag(worktree.id)
+            if store.grouping == .repository {
+                // One section per repository, so its name stays pinned to the top of the
+                // list while its worktrees scroll under it.
+                ForEach(store.visibleRepositories) { repository in
+                    Section {
+                        worktrees(of: repository)
+                    } header: {
+                        RepositoryHeader(repository: repository, store: store)
                     }
-                } header: {
-                    RepositoryHeader(repository: repository, store: store)
+                }
+            } else {
+                ForEach(store.repositoryGroups) { group in
+                    Section {
+                        ForEach(group.repositories) { repository in
+                            RepositoryHeader(repository: repository, store: store)
+                                // Not selectable: the row names a repository, and the
+                                // selection is always a worktree.
+                                .selectionDisabled()
+                                .listRowSeparator(.hidden)
+                            worktrees(of: repository)
+                        }
+                    } header: {
+                        Text(group.title)
+                    }
                 }
             }
         }
@@ -25,6 +41,13 @@ struct SidebarView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             FilterBar(store: store)
+        }
+    }
+
+    private func worktrees(of repository: Repository) -> some View {
+        ForEach(repository.worktrees) { worktree in
+            WorktreeRow(worktree: worktree, indented: store.grouping != .repository)
+                .tag(worktree.id)
         }
     }
 }
@@ -39,6 +62,18 @@ private struct FilterBar: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
+
+            HStack(spacing: 6) {
+                Text("Group by")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker("Group by", selection: $store.grouping) {
+                    ForEach(WorktreeStore.Grouping.allCases) { Text($0.label).tag($0) }
+                }
+                .labelsHidden()
+                .controlSize(.small)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if store.atRiskCount > 0 {
                 Label(
@@ -56,6 +91,11 @@ private struct FilterBar: View {
     }
 }
 
+/// The repository a worktree belongs to, said plainly.
+///
+/// Given as name plus owner rather than the directory path: two checkouts called `docs`
+/// are otherwise indistinguishable, and the path is long enough to push everything else
+/// off the row.
 private struct RepositoryHeader: View {
     var repository: Repository
     var store: WorktreeStore
@@ -63,9 +103,20 @@ private struct RepositoryHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 6) {
+                Image(systemName: "shippingbox.fill")
+                    .font(.callout)
+                    .foregroundStyle(.tint)
                 Text(repository.name)
-                    .font(.headline)
-                Spacer()
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                if let owner = repository.owner {
+                    Text(owner)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 4)
                 if let remote = repository.remote, let url = remote.homeURL {
                     Button {
                         SystemActions.open(url)
@@ -98,13 +149,14 @@ private struct RepositoryHeader: View {
                     .lineLimit(2)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
         .textCase(nil)
     }
 }
 
 private struct WorktreeRow: View {
     var worktree: Worktree
+    var indented: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
@@ -140,6 +192,7 @@ private struct WorktreeRow: View {
             }
         }
         .padding(.vertical, 2)
+        .padding(.leading, indented ? 12 : 0)
     }
 }
 

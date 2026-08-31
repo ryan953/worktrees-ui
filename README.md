@@ -147,7 +147,7 @@ The build is ad-hoc signed rather than notarized, so the first launch needs
 xattr -dr com.apple.quarantine "/Applications/Worktrees.app"
 ```
 
-### Requirements
+## Requirements
 
 - macOS 14 or later. The release build is universal.
 - `git` on your `PATH`.

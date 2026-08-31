@@ -56,9 +56,6 @@ jobs:
       - name: Check the binary is universal
         run: lipo -info "dist/Worktrees.app/Contents/MacOS/Worktrees"
 
-      # One asset, and it carries the version in its name. That is load-bearing:
-      # the tap's scripts/pick_release_asset.py picks the single asset whose name
-      # contains the version, and a second one fails the bump below.
       - name: Zip the app
         run: |
           set -euo pipefail
@@ -76,25 +73,21 @@ jobs:
           that exist only on this disk, which ones are already on GitHub, and where
           the working copy for each repository lives.
 
-          ## Install with Homebrew
+          ## Install
 
           ```sh
-          export HOMEBREW_GITHUB_API_TOKEN=<a token that can read this repo>
-          brew install --cask --no-quarantine ryan953/tap/worktrees-ui
+          brew install --cask ryan953/tap/worktrees-ui
           ```
 
-          The token is needed because this repository is private, and
-          `--no-quarantine` because the app is ad-hoc signed but not notarized.
+          Or download the zip below, unzip it, and drag **Worktrees.app** to
+          `/Applications`.
 
-          ## Install by hand
+          The build is ad-hoc signed rather than notarized, so the first launch
+          needs **right-click → Open** (once), or:
 
-          1. Download the zip, unzip it, and drag **Worktrees.app** to `/Applications`.
-          2. The build is not signed with an Apple Developer certificate, so the first
-             launch needs **right-click → Open** (once), or:
-
-             ```
-             xattr -dr com.apple.quarantine "/Applications/Worktrees.app"
-             ```
+          ```sh
+          xattr -dr com.apple.quarantine "/Applications/Worktrees.app"
+          ```
 
           ## Requirements
 

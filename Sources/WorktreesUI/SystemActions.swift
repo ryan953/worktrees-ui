@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import WorktreeKit
 
 enum SystemActions {
     static func copy(_ text: String) {

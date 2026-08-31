@@ -306,6 +306,35 @@ public struct Repository: Identifiable, Sendable, Hashable {
     public var linkedWorktrees: [Worktree] { worktrees.filter { !$0.isMain } }
     public var mainWorktree: Worktree? { worktrees.first(where: \.isMain) }
 
+    /// The owner, when the remote gives one — shown beside the name so two repositories
+    /// called `docs` are still tellable apart.
+    public var owner: String? { remote?.owner }
+
+    /// Nothing here but the working copy.
+    public var isSolo: Bool { linkedWorktrees.isEmpty }
+
+    /// Whether any worktree holds work of its own, committed or not.
+    ///
+    /// Deliberately not the same question as "is it pushed": a branch with commits that
+    /// are all on GitHub is still a repository with something going on in it.
+    public var hasLocalChanges: Bool {
+        worktrees.contains { $0.isDirty || $0.hasUniqueCommits }
+    }
+
+    /// Whether any worktree has uncommitted edits.
+    public var hasUncommittedChanges: Bool {
+        worktrees.contains(where: \.isDirty)
+    }
+
+    /// Whether any worktree holds commits that exist nowhere but this machine.
+    public var hasWorkOnlyHere: Bool {
+        worktrees.contains { $0.status.isAtRisk }
+    }
+
+    public var hasPullRequests: Bool {
+        worktrees.contains { $0.pullRequest != nil }
+    }
+
     public init(
         root: String, remote: RemoteRepo?, defaultBranch: String,
         worktrees: [Worktree], lastFetch: Date? = nil, warning: String? = nil

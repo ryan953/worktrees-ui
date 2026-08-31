@@ -59,12 +59,77 @@ exact commands before running anything:
 Both refuse to run over uncommitted changes, and the move puts the worktree back on its
 branch if the checkout fails.
 
+## Cleaning up
+
+Worktrees pile up. Once a branch is merged, its directory is just a copy of something
+GitHub already has — so the app can remove it, and the list goes back to showing only
+the work that still matters.
+
+A worktree is only removed when **all** of these hold:
+
+- no uncommitted changes, and git's own `worktree remove` agrees (no `--force`, ever);
+- no process is working in it, checked against `lsof`, so an editor or agent sitting in
+  the directory is never pulled out from under;
+- it is not locked, and it is not the working copy;
+- it has a pull request; and
+- its commits are **provably** readable back from GitHub.
+
+That last one is checked, not assumed. Either the remote branch still has every commit,
+or the commits are in `refs/pull/<n>/head` — which GitHub keeps permanently, including
+after the branch is deleted and for pull requests closed without merging. If neither can
+be shown, the worktree stays. "Could not tell" and "safe" never collapse into the same
+answer.
+
+Every removal is written to `~/Library/Logs/Worktrees/cleanup.log` with the command that
+brings it back:
+
+```
+git -C ~/code/seer fetch origin refs/pull/7760/head && \
+  git -C ~/code/seer worktree add -b seer/embed-logging <path> FETCH_HEAD
+```
+
+![The cleanup sheet](docs/cleanup-sheet.png)
+
+**By hand.** The **Clean Up** button lists everything that is safe, and everything that
+is not with the reason why. Worktrees whose pull request is still open are listed but
+left unticked. Each worktree's own pane also has a **Remove…** button, disabled with the
+reason when it does not qualify.
+
+**On a schedule.** Settings → Daily cleanup installs a LaunchAgent
+(`com.ryan953.worktrees-ui.cleanup`) that runs once a day. It is more cautious than the
+button, because nobody is watching: it waits until a worktree has been idle for a set
+number of days (14 by default) and skips open pull requests unless you say otherwise. It
+fetches first, since deciding from a week-old view of the remote is how a scheduled job
+would delete something that only looked published.
+
+The same tool runs from the command line, and reports without changing anything unless
+`--apply` is given:
+
+```sh
+/Applications/Worktrees.app/Contents/MacOS/worktrees-cleanup            # dry run
+/Applications/Worktrees.app/Contents/MacOS/worktrees-cleanup --apply
+```
+
 ## Freshness
 
 Whether a branch is "published" is read from your remote-tracking refs, so it is only as
 current as your last fetch. The detail pane says when that was, and there is a **Fetch**
 button per repository plus **Fetch All** in the toolbar. Fetching on every refresh is a
 setting, off by default, because it is the only part that touches the network.
+
+## Grouping the list
+
+The sidebar names the repository above each set of worktrees, with its owner and its
+working copy path. **Group by** then splits the repositories themselves:
+
+| Group by | Sections |
+| --- | --- |
+| Repository | One per repository, its name pinned while its worktrees scroll |
+| Local changes | Whether any worktree holds work of its own, committed or not |
+| Pull requests | Whether any worktree has one |
+| Worktree count | Repositories that are just a working copy, and the rest |
+
+![The sidebar grouped by local changes](docs/sidebar-grouped.png)
 
 ## Install
 
@@ -84,7 +149,8 @@ the app is ad-hoc signed but not notarized. Or download the zip from
 - `git` on your `PATH`.
 - `gh`, logged in, is optional — without it everything works except pull request links.
 
-The app only ever reads, except for the pull button, which you confirm each time.
+The app only ever reads, except for the pull and cleanup buttons, which you confirm
+each time, and the scheduled cleanup, which you install deliberately.
 
 ## Settings
 
@@ -92,6 +158,9 @@ The app only ever reads, except for the pull button, which you confirm each time
   to `~/code`, two levels down. Worktrees nested inside a repository are found by asking
   git, so they are picked up wherever they live.
 - **What to read** — whether to look up pull requests, and whether to fetch on refresh.
+- **Daily cleanup** — install or remove the scheduled job, when it runs, how long a
+  worktree must be idle first, whether open pull requests count, and whether the local
+  branch goes too.
 - **Tools** — explicit paths to `git` and `gh`, and which terminal to open.
 
 ## Development

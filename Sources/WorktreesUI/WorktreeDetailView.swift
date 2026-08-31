@@ -7,6 +7,8 @@ struct WorktreeDetailView: View {
     var store: WorktreeStore
 
     @State private var isPulling = false
+    @State private var isRemoving = false
+    @State private var decision: CleanupDecision?
 
     var body: some View {
         ScrollView {
@@ -30,6 +32,22 @@ struct WorktreeDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // Which repository this belongs to, above the branch: the branch name alone
+            // rarely says, and a worktree is only meaningful against its repository.
+            if let repository {
+                HStack(spacing: 6) {
+                    Image(systemName: "shippingbox.fill")
+                        .font(.caption)
+                        .foregroundStyle(.tint)
+                    Text(repository.name)
+                        .font(.headline)
+                    if let owner = repository.owner {
+                        Text(owner)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
             HStack(spacing: 8) {
                 Text(worktree.name)
                     .font(.title2.weight(.semibold))
@@ -98,8 +116,55 @@ struct WorktreeDetailView: View {
                 }
                 .help("Refresh what the remote has, so “published” is current")
             }
+
+            if !worktree.isMain {
+                Button(role: .destructive) {
+                    isRemoving = true
+                } label: {
+                    Label("Remove…", systemImage: "trash")
+                }
+                .disabled(decision?.isRemovable != true)
+                .help(removeHelp)
+            }
             Spacer()
         }
+        .task(id: worktree.id) {
+            decision = nil
+            guard !worktree.isMain else { return }
+            decision = await store.decision(for: worktree)
+        }
+        .confirmationDialog(
+            "Remove this worktree?", isPresented: $isRemoving, titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                guard let decision else { return }
+                Task { await store.remove(worktree, decision: decision) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(removeConfirmation)
+        }
+    }
+
+    /// Say why the button is unavailable rather than leaving a dimmed control unexplained.
+    private var removeHelp: String {
+        switch decision {
+        case .none: "Checking whether this can be removed…"
+        case let .some(.keep(reason)): reason.summary
+        case let .some(.remove(grounds)): grounds.summary
+        }
+    }
+
+    private var removeConfirmation: String {
+        guard case let .some(.remove(grounds)) = decision else { return removeHelp }
+        let restore = grounds.recovery.restoreCommand(
+            path: worktree.path, branch: worktree.branch)
+        return """
+            \(grounds.summary)
+
+            The directory is deleted. To bring it back:
+            git -C \(worktree.repoRoot) \(restore)
+            """
     }
 
     @ViewBuilder

@@ -14,7 +14,7 @@ jobs:
   test:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # The runner's Swift is older than a current desktop's, and has rejected
       # code that compiles locally. Printing it makes that visible in the log

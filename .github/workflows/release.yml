@@ -21,7 +21,7 @@ jobs:
   release:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Settle on both spellings of the version once, so the tag, the Info.plist
       # and the tap bump can never disagree about the leading "v".

@@ -116,13 +116,20 @@ WORKTREES_UI_LIVE_SCAN=1 swift test --filter LiveScanTests
 ## Releasing
 
 Push a tag and the workflow builds a universal `Worktrees.app`, attaches the zip to a
-GitHub release, and bumps the cask in
-[ryan953/homebrew-tap](https://github.com/ryan953/homebrew-tap):
+GitHub release, then calls the reusable `bump.yml` in
+[ryan953/homebrew-tap](https://github.com/ryan953/homebrew-tap) to move the
+`worktrees-ui` cask to the new version:
 
 ```sh
 git tag v0.2.0 && git push origin v0.2.0
 ```
 
 The tap bump needs a `TAP_TOKEN` secret with `Contents: Read+Write` on the tap and
-`Contents: Read` here. Without it the release still publishes and the job summary says
-how to bump the cask by hand.
+`Contents: Read` here, because the bump downloads this release's asset to checksum it:
+
+```sh
+gh secret set TAP_TOKEN -R ryan953/worktrees-ui
+```
+
+Without it the bump job fails with a message saying so, and the release itself still
+stands — `scripts/bump-cask.sh worktrees-ui <version>` in the tap does it by hand.

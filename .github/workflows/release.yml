@@ -20,6 +20,8 @@ permissions:
 jobs:
   release:
     runs-on: macos-15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v5
 
@@ -122,42 +124,20 @@ jobs:
               --notes-file notes.md
           fi
 
-      # github.token is scoped to this repository, so pushing to the tap needs a
-      # PAT in the TAP_TOKEN secret, with Contents: Read+Write on
-      # ryan953/homebrew-tap and Contents: Read here — the tap's bump script
-      # downloads this release's asset to checksum it. A classic token with
-      # `repo` covers both. With no token the release still stands; only the cask
-      # is left behind, and the summary says how to bump it by hand.
-      - name: Bump the Homebrew cask
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.update_tap }}
-        env:
-          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          set -euo pipefail
-          if [ -z "${TAP_TOKEN}" ]; then
-            echo "::warning::TAP_TOKEN is not set — leaving ryan953/homebrew-tap alone."
-            {
-              echo "### Homebrew tap not updated"
-              echo
-              echo "\`TAP_TOKEN\` is not set. Bump the cask by hand:"
-              echo
-              echo '```sh'
-              echo "scripts/bump-cask.sh worktrees-ui ${VERSION}"
-              echo '```'
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          git clone --depth 1 \
-            "https://x-access-token:${TAP_TOKEN}@github.com/ryan953/homebrew-tap.git" tap
-          cd tap
-          # The tap owns the bump logic (look up the release, find its asset,
-          # rewrite version + asset ID + sha256). Reuse it rather than keeping a
-          # second copy of that knowledge here.
-          HOMEBREW_GITHUB_API_TOKEN="${TAP_TOKEN}" \
-            scripts/bump-cask.sh worktrees-ui "${VERSION}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "worktrees-ui ${VERSION}"
-          git push
-          echo "Bumped ryan953/tap/worktrees-ui to ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+  # The tap owns what "bump" means; this only says which entry moved to what.
+  # It hangs off the release job rather than listening for `release: published`,
+  # which never fires for a release created with github.token.
+  #
+  # TAP_TOKEN needs Contents: Read+Write on ryan953/homebrew-tap and Contents:
+  # Read here, because a cask bump downloads this release's asset to checksum
+  # it. Without it this job fails and says so; the release itself still stands.
+  tap:
+    needs: release
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.update_tap }}
+    uses: ryan953/homebrew-tap/.github/workflows/bump.yml@main
+    with:
+      kind: cask
+      name: worktrees-ui
+      version: ${{ needs.release.outputs.version }}
+    secrets:
+      TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
